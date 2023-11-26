@@ -7,6 +7,7 @@ let camera, scene, renderer, world;
 let near, far;
 let pixR = window.devicePixelRatio ? window.devicePixelRatio : 1;
 let cubes = [];
+let rotations = [];
 let sceneOffsetTarget = {x: 0, y: 0};
 let sceneOffset = {x: 0, y: 0};
 
@@ -35,7 +36,7 @@ if (new URLSearchParams(window.location.search).get("clear"))
 else
 {	
 	// this code is essential to circumvent that some browsers preload the content of some pages before you actually hit the url
-	document.addEventListener("visibilitychange", () => 
+	document.addEventListener("visibilitychange", () =>
 	{
 		if (document.visibilityState != 'hidden' && !initialized)
 		{
@@ -52,6 +53,7 @@ else
 
 	function init ()
 	{
+
 		initialized = true;
 
 		// add a short timeout because window.offsetX reports wrong values before a short period 
@@ -62,7 +64,7 @@ else
 			updateWindowShape(false);
 			render();
 			window.addEventListener('resize', resize);
-		}, 500)	
+		}, 500)
 	}
 
 	function setupScene ()
@@ -93,8 +95,18 @@ else
 		windowManager.setWinShapeChangeCallback(updateWindowShape);
 		windowManager.setWinChangeCallback(windowsUpdated);
 
-		// here you can add your custom metadata to each windows instance
-		let metaData = {foo: "bar"};
+
+
+		let randomX = ((Math.floor(Math.random() * 5) + 1) * .1).toFixed(1)
+		let randomY = ((Math.floor(Math.random() * 3) + 1) * .1).toFixed(1)
+
+		let wins = windowManager.getWindows() ?? [];
+
+		let c = new t.Color();
+		c.setRGB(.1, 1.0, .5);
+
+
+		let metaData = { rotation: { x: randomX, y: randomY }, color: c };
 
 		// this will init the windowmanager and add this window to the centralised pool of windows
 		windowManager.init(metaData);
@@ -118,23 +130,99 @@ else
 		})
 
 		cubes = [];
+		rotations = [];
 
 		// add new cubes based on the current window setup
 		for (let i = 0; i < wins.length; i++)
 		{
 			let win = wins[i];
 
-			let c = new t.Color();
-			c.setHSL(i * .1, 1.0, .5);
+			let c = new t.Color(win.metaData.color)
+			c.setHSL(c.r * i, c.g, c.b)
+			console.log(c)
 
-			let s = 100 + i * 50;
-			let cube = new t.Mesh(new t.BoxGeometry(s, s, s), new t.MeshBasicMaterial({color: c , wireframe: false, transparent: true, opacity: .5}));
+			const s = 100;
+			let cube = new t.Mesh(new t.DodecahedronGeometry(s, 1), new t.MeshBasicMaterial({
+				color: c,
+				wireframe: true,
+				transparent: false,
+				opacity: .5
+			}));
 			cube.position.x = win.shape.x + (win.shape.w * .5);
 			cube.position.y = win.shape.y + (win.shape.h * .5);
 
-			world.add(cube);
 			cubes.push(cube);
+
+
 		}
+
+		const temp = []
+		if (cubes.length < 3) {
+			for (let i = 0; i < cubes.length; i++) {
+				const j = i === 0 ? cubes.length - 1 : i - 1;
+
+
+				let win = wins[i];
+
+				let pCube = cubes[j];
+				let cube = cubes[i];
+				const s = 100;
+
+				let nucleus = new t.Mesh(new t.DodecahedronGeometry(s * .2, 1), new t.MeshBasicMaterial({
+					color: pCube.material.color,
+					wireframe: true,
+					transparent: false,
+					opacity: .5
+				}));
+
+				cube.add(nucleus);
+				world.add(cube);
+				temp.push(cube)
+			}
+		}
+		else {
+			for (let i = 0; i < cubes.length; i++) {
+				const j = i === 0 ? cubes.length - 1 : i - 1;
+				const k = i === cubes.length - 1 ? 0 : i + 1;
+
+
+				let win = wins[i];
+
+				let pCube = cubes[j];
+				let nCube = cubes[k]
+
+				let cube = cubes[i];
+
+				const s = 100;
+				const offset = 20
+
+				let nucleusLeft = new t.Mesh(new t.DodecahedronGeometry(s * .2, 1), new t.MeshBasicMaterial({
+					color: pCube.material.color,
+					wireframe: true,
+					transparent: false,
+					opacity: .5
+				}));
+
+				let nucleusRight = new t.Mesh(new t.DodecahedronGeometry(s * .2, 1), new t.MeshBasicMaterial({
+					color: nCube.material.color,
+					wireframe: true,
+					transparent: false,
+					opacity: .5
+				}));
+
+				nucleusLeft.position.x = -1 * offset;
+				nucleusRight.position.x = offset;
+
+				cube.add(nucleusLeft);
+				cube.add(nucleusRight);
+				world.add(cube);
+				temp.push(cube);
+
+				console.log(win)
+
+			}
+		}
+		cubes = [...temp]
 	}
 
 	function updateWindowShape (easing = true)
@@ -175,8 +263,11 @@ else
 
 			cube.position.x = cube.position.x + (posTarget.x - cube.position.x) * falloff;
 			cube.position.y = cube.position.y + (posTarget.y - cube.position.y) * falloff;
-			cube.rotation.x = _t * .5;
-			cube.rotation.y = _t * .3;
+
+			const possibleRotations = [.1, .2, .3, .4, .5]
+
+			cube.rotation.x = _t * win.metaData.rotation.x;
+			cube.rotation.y = _t * win.metaData.rotation.y;
 		};
 
 		renderer.render(scene, camera);
